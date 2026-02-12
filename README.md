@@ -2,8 +2,6 @@
 
 基于 **AI Agent** 的需求文档自动分析与导入 [PingCode](https://pingcode.com/) 的智能助手。支持上传 Word / Markdown / TXT 需求文档，由大模型提取结构化工作项，并与已同步的 PingCode 项目进行**智能匹配与查重**，一键导入工作项。
 
-**仓库**: [https://github.com/knqiufan/pingcode-agent](https://github.com/knqiufan/pingcode-agent)
-
 ---
 
 ## Agent 亮点
