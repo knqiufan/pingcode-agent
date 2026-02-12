@@ -6,6 +6,7 @@ import {
   createProject,
   getProjects,
 } from '../services/pingcode.js';
+import { ImportRecord } from '../models/index.js';
 import { success } from '../utils/response.js';
 
 const router = express.Router();
@@ -114,9 +115,16 @@ router.post('/check-duplicates', requireAuth, async (req, res, next) => {
 
       let match = null;
       if (results.ids[0].length > 0) {
+        // SeekDB 返回的是距离，需要转换为相似度分数
+        // 距离范围通常是 0-2，值越小越相似
+        // 转换为相似度：1 - (distance / 2)
+        const distance = results.distances?.[0]?.[0] || 0;
+        const score = Math.max(0, 1 - (distance / 2));
+
         match = {
           id: results.ids[0][0],
           title: results.metadatas[0][0].title,
+          score: score, // 添加相似度分数
         };
       }
 
@@ -275,6 +283,23 @@ router.post('/import', requireAuth, async (req, res, next) => {
       results.success += batchResult.success;
       results.failed += batchResult.failed;
       results.errors.push(...batchResult.errors);
+    }
+
+    // 更新导入记录（如果提供了 record_id）
+    if (req.body.record_id) {
+      try {
+        await ImportRecord.update(
+          {
+            imported_count: results.success,
+            failed_count: results.failed,
+            status: results.failed > 0 ? 'partial_success' : 'success',
+            error_message: results.errors.length > 0 ? JSON.stringify(results.errors) : null,
+          },
+          { where: { id: req.body.record_id, user_id: req.user.id } }
+        );
+      } catch (err) {
+        console.error('[Import] 更新导入记录失败:', err.message);
+      }
     }
 
     res.json(success({ result: results }, '导入完成'));

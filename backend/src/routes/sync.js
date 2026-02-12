@@ -34,26 +34,87 @@ function chunk(arr, size) {
   return result;
 }
 
-/** 确保元数据表有数据：无则拉取并入库 */
+/** 确保元数据表有数据：增量更新元数据 */
 async function ensureMetadata(userId, accessToken, domain, projectList) {
-  const count = await WorkItemType.count({ where: { user_id: userId } });
-  if (count > 0) return;
+  console.log('[Sync] 开始增量同步元数据...');
 
-  console.log('[Sync] 元数据表为空，开始获取并入库...');
+  // 获取现有的元数据ID集合，用于去重
+  const [existingTypes, existingStates, existingProperties, existingPriorities] = await Promise.all([
+    WorkItemType.findAll({
+      where: { user_id: userId },
+      attributes: ['id', 'project_id'],
+    }),
+    WorkItemState.findAll({
+      where: { user_id: userId },
+      attributes: ['id', 'project_id', 'work_item_type_id'],
+    }),
+    WorkItemProperty.findAll({
+      where: { user_id: userId },
+      attributes: ['id', 'project_id', 'work_item_type_id'],
+    }),
+    WorkItemPriority.findAll({
+      where: { user_id: userId },
+      attributes: ['id', 'project_id'],
+    }),
+  ]);
+
+  // 创建ID集合用于去重
+  const existingTypeIds = new Set(existingTypes.map(t => `${t.project_id}:${t.id}`));
+  const existingStateIds = new Set(existingStates.map(s => `${s.project_id}:${s.work_item_type_id}:${s.id}`));
+  const existingPropertyIds = new Set(existingProperties.map(p => `${p.project_id}:${p.work_item_type_id}:${p.id}`));
+  const existingPriorityIds = new Set(existingPriorities.map(p => `${p.project_id}:${p.id}`));
+
+  // 统计新增数量
+  let newTypesCount = 0, newStatesCount = 0, newPropertiesCount = 0, newPrioritiesCount = 0;
+
   for (const proj of projectList) {
-    await fetchAndStoreMetadataForProject(userId, accessToken, domain, proj.id);
+    const counts = await fetchAndStoreMetadataForProject(
+      userId,
+      accessToken,
+      domain,
+      proj.id,
+      existingTypeIds,
+      existingStateIds,
+      existingPropertyIds,
+      existingPriorityIds
+    );
+    newTypesCount += counts.types || 0;
+    newStatesCount += counts.states || 0;
+    newPropertiesCount += counts.properties || 0;
+    newPrioritiesCount += counts.priorities || 0;
   }
+
+  console.log(`[Sync] 元数据增量同步完成：+${newTypesCount} types, +${newStatesCount} states, +${newPropertiesCount} properties, +${newPrioritiesCount} priorities`);
 }
 
-async function fetchAndStoreMetadataForProject(userId, accessToken, domain, projectId) {
+async function fetchAndStoreMetadataForProject(
+  userId,
+  accessToken,
+  domain,
+  projectId,
+  existingTypeIds,
+  existingStateIds,
+  existingPropertyIds,
+  existingPriorityIds
+) {
+  const counts = { types: 0, states: 0, properties: 0, priorities: 0 };
+
   const typesRes = await getWorkItemTypes(accessToken, projectId, domain);
   const typeList = Array.isArray(typesRes) ? typesRes : (typesRes?.values || []);
 
   for (const t of typeList) {
-    await WorkItemType.findOrCreate({
-      where: { id: t.id, project_id: projectId, user_id: userId },
-      defaults: { name: t.name || t.id, group: t.group || '' },
+    const typeKey = `${projectId}:${t.id}`;
+    if (existingTypeIds.has(typeKey)) continue;
+
+    await WorkItemType.create({
+      id: t.id,
+      project_id: projectId,
+      user_id: userId,
+      name: t.name || t.id,
+      group: t.group || '',
     });
+    existingTypeIds.add(typeKey);
+    counts.types++;
   }
 
   for (const t of typeList) {
@@ -65,46 +126,57 @@ async function fetchAndStoreMetadataForProject(userId, accessToken, domain, proj
     const propList = Array.isArray(propsRes) ? propsRes : (propsRes?.values || []);
 
     for (const s of stateList) {
-      await WorkItemState.findOrCreate({
-        where: {
-          id: s.id,
-          project_id: projectId,
-          work_item_type_id: t.id,
-          user_id: userId,
-        },
-        defaults: {
-          name: s.name || '',
-          type: s.type || '',
-          color: s.color || '',
-        },
+      const stateKey = `${projectId}:${t.id}:${s.id}`;
+      if (existingStateIds.has(stateKey)) continue;
+
+      await WorkItemState.create({
+        id: s.id,
+        project_id: projectId,
+        work_item_type_id: t.id,
+        user_id: userId,
+        name: s.name || '',
+        type: s.type || '',
+        color: s.color || '',
       });
+      existingStateIds.add(stateKey);
+      counts.states++;
     }
 
     for (const p of propList) {
-      await WorkItemProperty.findOrCreate({
-        where: {
-          id: p.id,
-          project_id: projectId,
-          work_item_type_id: t.id,
-          user_id: userId,
-        },
-        defaults: {
-          name: p.name || p.id,
-          type: p.type || '',
-          options: p.options || null,
-        },
+      const propKey = `${projectId}:${t.id}:${p.id}`;
+      if (existingPropertyIds.has(propKey)) continue;
+
+      await WorkItemProperty.create({
+        id: p.id,
+        project_id: projectId,
+        work_item_type_id: t.id,
+        user_id: userId,
+        name: p.name || p.id,
+        type: p.type || '',
+        options: p.options || null,
       });
+      existingPropertyIds.add(propKey);
+      counts.properties++;
     }
   }
 
   const prioRes = await getWorkItemPriorities(accessToken, projectId, domain);
   const prioList = Array.isArray(prioRes) ? prioRes : (prioRes?.values || []);
   for (const p of prioList) {
-    await WorkItemPriority.findOrCreate({
-      where: { id: p.id, project_id: projectId, user_id: userId },
-      defaults: { name: p.name || p.id },
+    const prioKey = `${projectId}:${p.id}`;
+    if (existingPriorityIds.has(prioKey)) continue;
+
+    await WorkItemPriority.create({
+      id: p.id,
+      project_id: projectId,
+      user_id: userId,
+      name: p.name || p.id,
     });
+    existingPriorityIds.add(prioKey);
+    counts.priorities++;
   }
+
+  return counts;
 }
 
 /** 同步 PingCode 项目和工作项（增量：仅新增入向量库与关系库） */

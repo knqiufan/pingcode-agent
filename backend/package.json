@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@langchain/anthropic": "^1.3.17",
     "@langchain/core": "^1.1.19",
     "@langchain/openai": "^1.2.5",
     "@seekdb/default-embed": "^1.1.1",

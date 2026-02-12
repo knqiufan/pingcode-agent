@@ -20,7 +20,7 @@ export interface WorkItem {
   estimated_hours: number
   start_at: string
   status?: string
-  match?: { id: string; title: string } | null
+  match?: { id: string; title: string; score?: number } | null
   /** PingCode 工作项类型 ID */
   type_id?: string
   /** PingCode 优先级 ID */
@@ -29,6 +29,10 @@ export interface WorkItem {
   state_id?: string
   /** 负责人 ID（PingCode 用户 ID） */
   assignee_id?: string
+  /** 负责人姓名（从需求文档中识别） */
+  assignee_name?: string | null
+  /** 解决方案建议 */
+  solution_suggestion?: string
   /** 自定义属性 */
   properties?: Record<string, unknown>
 }
@@ -149,6 +153,8 @@ export interface ImportResultData {
 export interface AnalyzeResult {
   success: boolean
   data: WorkItem[]
+  /** 导入记录 ID，用于后续更新导入状态 */
+  record_id?: string
 }
 
 /** 登录响应 */

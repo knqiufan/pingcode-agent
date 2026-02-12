@@ -10,7 +10,7 @@
       <el-tab-pane label="工作项类型" name="types">
         <el-table :data="appStore.workItemTypes" stripe max-height="360">
           <el-table-column prop="id" label="ID" width="120" />
-          <el-table-column prop="project_id" label="项目 ID" width="200" show-overflow-tooltip />
+          <el-table-column prop="project_name" label="项目名称" width="180" show-overflow-tooltip />
           <el-table-column prop="name" label="名称" min-width="120" />
           <el-table-column prop="group" label="分组" width="120" />
         </el-table>
@@ -18,7 +18,7 @@
       <el-tab-pane label="工作项状态" name="states">
         <el-table :data="appStore.workItemStates" stripe max-height="360">
           <el-table-column prop="id" label="ID" width="200" show-overflow-tooltip />
-          <el-table-column prop="project_id" label="项目 ID" width="200" show-overflow-tooltip />
+          <el-table-column prop="project_name" label="项目名称" width="180" show-overflow-tooltip />
           <el-table-column prop="name" label="名称" width="100" />
           <el-table-column prop="type" label="类型" width="80" />
           <el-table-column label="颜色" width="80">
@@ -36,7 +36,7 @@
       <el-tab-pane label="工作项属性" name="properties">
         <el-table :data="appStore.workItemProperties" stripe max-height="360">
           <el-table-column prop="id" label="ID" width="120" />
-          <el-table-column prop="project_id" label="项目 ID" width="200" show-overflow-tooltip />
+          <el-table-column prop="project_name" label="项目名称" width="180" show-overflow-tooltip />
           <el-table-column prop="name" label="名称" width="120" />
           <el-table-column prop="type" label="类型" width="80" />
         </el-table>
@@ -44,7 +44,7 @@
       <el-tab-pane label="工作项优先级" name="priorities">
         <el-table :data="appStore.workItemPriorities" stripe max-height="360">
           <el-table-column prop="id" label="ID" width="200" show-overflow-tooltip />
-          <el-table-column prop="project_id" label="项目 ID" width="200" show-overflow-tooltip />
+          <el-table-column prop="project_name" label="项目名称" width="180" show-overflow-tooltip />
           <el-table-column prop="name" label="名称" width="120" />
         </el-table>
       </el-tab-pane>

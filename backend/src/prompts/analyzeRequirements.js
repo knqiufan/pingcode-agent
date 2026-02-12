@@ -3,7 +3,7 @@
  * 用于从需求文档中提取结构化工作项
  */
 
-export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助手，擅长分析需求文档并提取结构化的工作项信息。
+export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助手和技术顾问，擅长分析需求文档并提取结构化的工作项信息。
 
 ## 任务
 分析以下需求文档，识别其中的所有工作项（需求、任务、功能点等），并按项目分组整理。
@@ -46,6 +46,19 @@ export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助
   - 使用 ISO 8601 格式: "YYYY-MM-DDTHH:mm:ss.sssZ"
   - 默认使用当前时间: "{current_time}"
 
+- **assignee_name** (string): 负责人姓名
+  - 从文档中识别该工作项的负责人
+  - 若文档中明确指派了人员，提取姓名
+  - 若未明确指派，返回 null（系统将默认为当前用户）
+
+- **solution_suggestion** (string): 解决方案建议
+  - 根据工作项类型提供具体的实施建议
+  - 对于 story/feature：提供开发建议、技术选型建议、实现步骤
+  - 对于 task：提供具体的实现方案、关键步骤、注意事项
+  - 对于 bug：提供问题分析、排查思路、修复建议
+  - 对于 epic：提供拆分建议、依赖关系、风险点
+  - 建议应具体可执行，包含技术细节
+
 ### 选填字段（用于与 PingCode 工作项类型对接）
 - **type_id** (string): 工作项类型，必须为以下值之一
   - "story": 用户故事（需求、功能描述）
@@ -61,6 +74,38 @@ export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助
 3. **优先级判断**: 根据需求的重要性、紧急程度、依赖关系综合判断
 4. **工时评估**: 考虑技术复杂度、团队熟悉度、潜在风险等因素
 5. **完整性**: 确保提取所有明确的需求点，不遗漏关键信息
+6. **负责人识别**: 注意文档中的"由XXX负责"、"XXX负责"等表述
+7. **解决方案**: 提供专业、具体、可执行的解决方案建议
+
+## 解决方案建议示例
+
+### Story/Feature 示例
+"实现用户注册功能"
+- 方案建议：
+  1. 后端实现注册接口（POST /api/auth/register）
+  2. 使用 bcrypt 对密码进行加密存储
+  3. 集成邮件服务发送验证邮件
+  4. 前端实现注册表单，包含邮箱、密码、确认密码字段
+  5. 添加表单验证（邮箱格式、密码强度、密码一致性）
+  6. 实现防重复提交和验证码防刷机制
+
+### Task 示例
+"优化商品列表查询性能"
+- 方案建议：
+  1. 在 product_name、category_id 字段上添加联合索引
+  2. 使用 Redis 缓存热门分类的商品列表
+  3. 实现 SQL 分页，避免全表扫描
+  4. 考虑使用 Elasticsearch 处理复杂搜索
+  5. 定期分析慢查询日志，持续优化
+
+### Bug 示例
+"用户登录后状态丢失"
+- 方案建议：
+  1. 检查 JWT token 过期时间配置
+  2. 验证前端 token 存储机制（localStorage vs cookie）
+  3. 检查请求拦截器是否正确携带 token
+  4. 排查后端 token 验证中间件的异常处理
+  5. 添加前端 token 刷新机制
 
 ## 输出格式
 只输出 JSON 数组，不要包含任何其他文字、解释或 markdown 代码块标记。
@@ -74,7 +119,9 @@ export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助
     "priority": "High",
     "estimated_hours": 16,
     "start_at": "{current_time}",
-    "type_id": "story"
+    "type_id": "story",
+    "assignee_name": null,
+    "solution_suggestion": "1. 设计注册接口（支持邮箱/手机号）\\n2. 使用 bcrypt 加密密码\\n3. 集成邮件/短信服务发送验证码\\n4. 前端表单实现与验证\\n5. 实现防重复提交机制\\n6. 添加注册后自动登录功能"
   }},
   {{
     "project_name": "用户中心",
@@ -83,7 +130,9 @@ export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助
     "priority": "High",
     "estimated_hours": 20,
     "start_at": "{current_time}",
-    "type_id": "story"
+    "type_id": "story",
+    "assignee_name": "张三",
+    "solution_suggestion": "1. 实现本地登录接口（邮箱/手机号+密码）\\n2. 集成微信/支付宝 OAuth2.0\\n3. 使用 JWT 生成访问令牌和刷新令牌\\n4. 前端实现登录表单和第三方登录按钮\\n5. 实现令牌自动刷新和过期处理\\n6. 添加记住密码功能（持久化刷新令牌）"
   }},
   {{
     "project_name": "商品管理系统",
@@ -92,7 +141,9 @@ export const ANALYZE_REQUIREMENTS_PROMPT = `你是一位专业的项目管理助
     "priority": "Medium",
     "estimated_hours": 12,
     "start_at": "{current_time}",
-    "type_id": "task"
+    "type_id": "task",
+    "assignee_name": null,
+    "solution_suggestion": "1. 分析慢查询 SQL，在关键字段添加索引\\n2. 实现分页查询（limit/offset）\\n3. 使用 Redis 缓存热点数据\\n4. 考虑使用游标分页替代 offset\\n5. 添加数据库查询性能监控"
   }}
 ]
 

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { requireAuth } from '../middleware/auth.js';
 import { parseFile } from '../services/parser.js';
 import { analyzeRequirements } from '../services/agent.js';
+import { ImportRecord } from '../models/index.js';
 
 const router = express.Router();
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 10 * 1024 * 1024 } });
@@ -23,7 +24,7 @@ router.post('/analyze', requireAuth, upload.single('file'), async (req, res, nex
     // 清理临时文件
     await fs.unlink(filePath).catch(() => {});
 
-    const requirements = await analyzeRequirements(text);
+    const requirements = await analyzeRequirements(text, req.user.id);
 
     // 为每条需求添加唯一 ID
     const data = requirements.map((item) => ({
@@ -32,7 +33,19 @@ router.post('/analyze', requireAuth, upload.single('file'), async (req, res, nex
       status: 'new',
     }));
 
-    res.json({ success: true, data });
+    // 创建导入记录
+    const uniqueProjectNames = [...new Set(requirements.map(r => r.project_name))];
+    const record = await ImportRecord.create({
+      id: uuidv4(),
+      user_id: req.user.id,
+      file_name: req.file.originalname,
+      requirements_count: requirements.length,
+      projects_count: uniqueProjectNames.length,
+      status: 'analyzed',
+    });
+
+    // 在响应中返回记录ID
+    res.json({ success: true, data, record_id: record.id });
   } catch (e) {
     // 确保临时文件被清理
     await fs.unlink(filePath).catch(() => {});

@@ -38,16 +38,8 @@ export const appConfig = {
   },
 
   pingcode: {
-    clientId: process.env.PINGCODE_CLIENT_ID || '',
-    clientSecret: process.env.PINGCODE_CLIENT_SECRET || '',
     redirectUri: process.env.PINGCODE_REDIRECT_URI || 'http://localhost:3000/auth/callback',
     host: process.env.PINGCODE_HOST || 'https://open.pingcode.com',
-  },
-
-  llm: {
-    apiKey: process.env.OPENAI_API_KEY || '',
-    baseUrl: process.env.OPENAI_BASE_URL || '',
-    model: process.env.OPENAI_MODEL || 'deepseek-chat',
   },
 
   seekdb: {

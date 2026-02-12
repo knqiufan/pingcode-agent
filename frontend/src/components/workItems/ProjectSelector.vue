@@ -15,21 +15,38 @@
       <div class="selector-main">
         <el-select
           :model-value="appStore.selectedProjectId"
-          placeholder="选择目标项目"
+          placeholder="选择目标项目或创建新项目"
           filterable
           class="project-select"
           @change="handleChange"
         >
+          <!-- 已存在的 PingCode 项目 -->
           <el-option
             v-for="item in appStore.projects"
             :key="item.id"
             :label="formatLabel(item)"
             :value="item.id"
           />
+          <!-- 识别到但未匹配的项目，可作为新项目创建 -->
+          <el-option
+            v-for="name in unmatchedProjectNames"
+            :key="`new-${name}`"
+            :label="`${name} (新建项目)`"
+            :value="`new:${name}`"
+          >
+            <div class="new-project-option">
+              <span>{{ name }}</span>
+              <el-tag size="small" type="success" effect="plain">新建</el-tag>
+            </div>
+          </el-option>
         </el-select>
         <span v-if="appStore.projects.length" class="match-hint">
           <el-icon color="#52c41a"><CircleCheckFilled /></el-icon>
           已自动匹配最佳项目
+        </span>
+        <span v-else-if="unmatchedProjectNames.length" class="match-hint warning">
+          <el-icon color="#faad14"><WarningFilled /></el-icon>
+          未匹配到现有项目，可选择创建新项目
         </span>
       </div>
       <div v-if="projectSummary.length" class="project-summary">
@@ -38,10 +55,10 @@
           v-for="(name, idx) in projectSummary"
           :key="idx"
           size="small"
-          type="info"
+          :type="isMatchedProject(name) ? 'success' : 'warning'"
           effect="plain"
         >
-          {{ name }}
+          {{ name }}{{ isMatchedProject(name) ? '' : ' (待创建)' }}
         </el-tag>
       </div>
     </div>
@@ -50,7 +67,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { FolderOpened, CircleCheckFilled } from '@element-plus/icons-vue'
+import { FolderOpened, CircleCheckFilled, WarningFilled } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import type { Project } from '@/api/types'
 
@@ -61,6 +78,17 @@ const projectSummary = computed(() => {
   return names
 })
 
+// 已匹配的项目ID集合
+const matchedProjectIds = computed(() => new Set(appStore.projects.map(p => p.id)))
+
+// 已匹配的项目名称集合
+const matchedProjectNames = computed(() => new Set(appStore.projects.map(p => p.name)))
+
+// 未匹配的项目名称（需要创建的新项目）
+const unmatchedProjectNames = computed(() => {
+  return projectSummary.value.filter(name => !matchedProjectNames.value.has(name))
+})
+
 function formatLabel(item: Project): string {
   if (item.score != null) {
     return `${item.name}（匹配度: ${item.score.toFixed(2)}）`
@@ -68,10 +96,23 @@ function formatLabel(item: Project): string {
   return item.name
 }
 
+function isMatchedProject(name: string): boolean {
+  return matchedProjectNames.value.has(name)
+}
+
 function handleChange(val: string) {
-  appStore.selectedProjectId = val
-  appStore.fetchMetadata(val)
-  appStore.checkDuplicateItems()
+  // 如果是新建项目（格式为 new:项目名）
+  if (val?.startsWith('new:')) {
+    const projectName = val.substring(4)
+    appStore.selectedProjectId = projectName // 存储项目名称而非ID
+  } else {
+    appStore.selectedProjectId = val
+  }
+  // 对于新建项目，不需要获取元数据（项目还不存在）
+  if (!val?.startsWith('new:')) {
+    appStore.fetchMetadata(val)
+    appStore.checkDuplicateItems()
+  }
 }
 </script>
 
@@ -110,7 +151,7 @@ function handleChange(val: string) {
 }
 
 .project-select {
-  width: 360px;
+  width: 400px;
 }
 
 .match-hint {
@@ -119,6 +160,17 @@ function handleChange(val: string) {
   gap: 4px;
   font-size: $font-size-sm;
   color: $success-color;
+
+  &.warning {
+    color: #faad14;
+  }
+}
+
+.new-project-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
 .project-summary {

@@ -27,6 +27,10 @@ export function checkDuplicates(items: WorkItem[], projectId: string) {
 }
 
 /** 批量导入工作项 */
-export function importItems(items: WorkItem[], projectId: string) {
-  return request.post<any, ApiResponse<ImportResultData>>('/api/import', { items, projectId })
+export function importItems(items: WorkItem[], projectId: string, recordId?: string) {
+  return request.post<any, ApiResponse<ImportResultData>>('/api/import', {
+    items,
+    projectId,
+    record_id: recordId,
+  })
 }

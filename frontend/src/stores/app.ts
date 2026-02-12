@@ -34,6 +34,8 @@ export const useAppStore = defineStore('app', () => {
   const analyzing = ref(false)
   const syncing = ref(false)
   const importing = ref(false)
+  /** 当前分析产生的导入记录 ID，用于导入完成后更新记录状态 */
+  const currentRecordId = ref<string | undefined>(undefined)
 
   const syncedProjects = ref<SyncedProjectMeta[]>([])
   const syncedWorkItems = ref<SyncedWorkItemMeta[]>([])
@@ -135,6 +137,8 @@ export const useAppStore = defineStore('app', () => {
     try {
       const res = await analyzeFile(formData)
       requirements.value = res.data || []
+      // 保存导入记录 ID，用于后续导入时更新记录状态
+      currentRecordId.value = res.record_id
       await autoMatchProject()
     } catch {
       // 错误已由拦截器处理
@@ -196,15 +200,23 @@ export const useAppStore = defineStore('app', () => {
     if (!selectedProjectId.value) return
     importing.value = true
     try {
-      const res = await importItems(requirements.value, selectedProjectId.value)
+      // 如果是新建项目（格式为 new:项目名），不传 projectId，让后端根据 project_name 自动创建
+      const isNewProject = selectedProjectId.value?.startsWith('new:')
+      const projectId = isNewProject ? undefined : selectedProjectId.value
+
+      const res = await importItems(
+        requirements.value,
+        projectId || '',
+        currentRecordId.value,
+      )
       const result = res.data?.result
-      
+
       // 提示自动创建的项目
       if (result?.createdProjects && result.createdProjects.length > 0) {
         const names = result.createdProjects.map((p) => p.name).join('、')
         ElMessage.info(`自动创建了项目: ${names}`)
       }
-      
+
       ElMessage.success(`成功导入 ${result?.success ?? 0} 个工作项`)
       if (result?.failed && result.failed > 0) {
         ElMessage.warning(`${result.failed} 个工作项导入失败`)
@@ -212,7 +224,8 @@ export const useAppStore = defineStore('app', () => {
       requirements.value = []
       selectedProjectId.value = ''
       projects.value = []
-      
+      currentRecordId.value = undefined
+
       // 刷新同步数据以显示新创建的项目
       await fetchSyncedData()
     } catch {
@@ -227,6 +240,7 @@ export const useAppStore = defineStore('app', () => {
     requirements.value = []
     selectedProjectId.value = ''
     projects.value = []
+    currentRecordId.value = undefined
   }
 
   return {

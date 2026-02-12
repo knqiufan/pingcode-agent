@@ -45,6 +45,18 @@
             <el-tab-pane label="元数据管理" name="metadata">
               <MetadataPanel />
             </el-tab-pane>
+            <el-tab-pane label="模型配置" name="models">
+              <ModelManagement />
+            </el-tab-pane>
+            <el-tab-pane label="导入记录" name="records">
+              <ImportRecords />
+            </el-tab-pane>
+            <el-tab-pane v-if="userStore.isAdmin" label="用户管理" name="users">
+              <UserManagement />
+            </el-tab-pane>
+            <el-tab-pane v-if="userStore.isAdmin" label="角色管理" name="roles">
+              <RoleManagement />
+            </el-tab-pane>
           </el-tabs>
         </template>
       </div>
@@ -68,6 +80,10 @@ import WorkItemTable from '@/components/workItems/WorkItemTable.vue'
 import SyncedProjectList from '@/components/dashboard/SyncedProjectList.vue'
 import SyncedWorkItemList from '@/components/dashboard/SyncedWorkItemList.vue'
 import MetadataPanel from '@/components/dashboard/MetadataPanel.vue'
+import ModelManagement from '@/components/models/ModelManagement.vue'
+import ImportRecords from '@/components/records/ImportRecords.vue'
+import RoleManagement from '@/components/roles/RoleManagement.vue'
+import UserManagement from '@/components/users/UserManagement.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
 
 const router = useRouter()

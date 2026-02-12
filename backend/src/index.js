@@ -10,6 +10,10 @@ import syncRoutes from './routes/sync.js';
 import analyzeRoutes from './routes/analyze.js';
 import workItemRoutes from './routes/workItems.js';
 import metadataRoutes from './routes/metadata.js';
+import modelsRoutes from './routes/models.js';
+import recordsRoutes from './routes/records.js';
+import rolesRoutes from './routes/roles.js';
+import usersRoutes from './routes/users.js';
 import { initDB } from './services/db.js';
 
 const app = express();
@@ -30,6 +34,10 @@ app.use('/api', syncRoutes);
 app.use('/api', analyzeRoutes);
 app.use('/api', workItemRoutes);
 app.use('/api/metadata', metadataRoutes);
+app.use('/api/models', modelsRoutes);
+app.use('/api/records', recordsRoutes);
+app.use('/api/roles', rolesRoutes);
+app.use('/api/users', usersRoutes);
 
 app.get('/', (_req, res) => {
   res.json({ message: 'PingCode Agent 后端服务运行中', env: appConfig.env });

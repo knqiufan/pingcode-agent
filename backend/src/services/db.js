@@ -39,16 +39,40 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** 连接关系数据库并同步模型 */
 async function connectRelational() {
   await sequelize.authenticate();
-  // 动态导入确保模型已注册
-  await import('../models/User.js');
-  await import('../models/WorkItemType.js');
-  await import('../models/WorkItemState.js');
-  await import('../models/WorkItemProperty.js');
-  await import('../models/WorkItemPriority.js');
-  await import('../models/SyncedProject.js');
-  await import('../models/SyncedWorkItem.js');
+  // 导入 models/index.js 以确保所有模型和关联关系都被注册
+  await import('../models/index.js');
   await sequelize.sync({ alter: true });
   console.log('[DB] 关系数据库已连接');
+}
+
+/** 初始化默认角色 */
+async function initDefaultRoles() {
+  const { Role } = await import('../models/index.js');
+
+  const defaultRoles = [
+    {
+      name: 'admin',
+      display_name: '管理员',
+      description: '系统管理员，拥有所有权限',
+      is_system: true,
+    },
+    {
+      name: 'user',
+      display_name: '普通用户',
+      description: '普通用户，拥有基本权限',
+      is_system: true,
+    },
+  ];
+
+  for (const roleData of defaultRoles) {
+    const [role, created] = await Role.findOrCreate({
+      where: { name: roleData.name },
+      defaults: roleData,
+    });
+    if (created) {
+      console.log(`[DB] 创建默认角色: ${role.display_name}`);
+    }
+  }
 }
 
 /** 初始化向量集合 */
@@ -70,6 +94,7 @@ export async function initDB() {
   for (let i = 0; i < retryCount; i++) {
     try {
       await connectRelational();
+      await initDefaultRoles();
       await initCollections();
       console.log('[DB] SeekDB 向量数据库已连接');
       return;
