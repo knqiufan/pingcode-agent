@@ -59,9 +59,19 @@ export function deleteModelConfig(id: string) {
   return request.delete<any, ApiResponse<null>>(`/api/models/${id}`)
 }
 
-/** 测试模型连接 */
+/** 测试模型连接（通过 id） */
 export function testModelConfig(id: string) {
   return request.post<any, ApiResponse<null>>(`/api/models/${id}/test`)
+}
+
+/** 测试模型连接（通过配置项，用于新增/编辑前测试） */
+export function testModelConfigByBody(data: {
+  provider: string
+  api_key: string
+  base_url?: string
+  model: string
+}) {
+  return request.post<any, ApiResponse<null>>('/api/models/test', data)
 }
 
 // ===== 角色和权限 API =====

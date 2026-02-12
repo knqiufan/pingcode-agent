@@ -29,7 +29,8 @@
       </el-table-column>
       <el-table-column prop="is_default" label="默认" width="80" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.is_default" type="primary" size="small">默认</el-tag>
+          <el-tag v-if="row.is_default" type="primary" size="small">是</el-tag>
+          <el-tag type="info" v-else>否</el-tag >
         </template>
       </el-table-column>
       <el-table-column label="操作" width="260" align="center" fixed="right">
@@ -103,6 +104,13 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button
+          :loading="testingInDialog"
+          :disabled="!formData.api_key || !formData.model"
+          @click="testConnectionInDialog"
+        >
+          测试连接
+        </el-button>
         <el-button type="primary" :loading="saving" @click="saveConfig">
           {{ isEdit ? '保存' : '创建' }}
         </el-button>
@@ -121,6 +129,7 @@ import {
   updateModelConfig,
   deleteModelConfig as deleteModelConfigApi,
   testModelConfig,
+  testModelConfigByBody,
   type ModelConfig,
   type ModelConfigRequest,
 } from '@/api/models'
@@ -131,6 +140,7 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const saving = ref(false)
 const testingId = ref<string | null>(null)
+const testingInDialog = ref(false)
 const formRef = ref<FormInstance>()
 
 const formData = reactive<ModelConfigRequest>({
@@ -163,6 +173,7 @@ async function loadConfigs() {
 
 function openCreateDialog() {
   isEdit.value = false
+  currentEditId.value = undefined
   Object.assign(formData, {
     name: '',
     provider: 'openai',
@@ -178,6 +189,7 @@ function openCreateDialog() {
 
 function editConfig(config: ModelConfig) {
   isEdit.value = true
+  currentEditId.value = config.id
   Object.assign(formData, {
     name: config.name,
     provider: config.provider,
@@ -220,6 +232,26 @@ async function testConnection(config: ModelConfig) {
     // Error handled by interceptor
   } finally {
     testingId.value = null
+  }
+}
+
+async function testConnectionInDialog() {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  testingInDialog.value = true
+  try {
+    await testModelConfigByBody({
+      provider: formData.provider,
+      api_key: formData.api_key,
+      base_url: formData.base_url || undefined,
+      model: formData.model,
+    })
+    ElMessage.success('连接成功')
+  } catch {
+    // Error handled by interceptor
+  } finally {
+    testingInDialog.value = false
   }
 }
 

@@ -1,4 +1,6 @@
+import crypto from 'crypto';
 import express from 'express';
+import { Op } from 'sequelize';
 import { requireAuth } from '../middleware/auth.js';
 import { ModelConfig } from '../models/index.js';
 import { success } from '../utils/response.js';
@@ -17,6 +19,33 @@ router.get('/', requireAuth, async (req, res, next) => {
     res.json(success(configs));
   } catch (e) {
     next(e);
+  }
+});
+
+/** 测试模型连接（通过请求体传入配置，用于新增/编辑前测试） */
+router.post('/test', requireAuth, async (req, res, next) => {
+  try {
+    const { provider, api_key, base_url, model } = req.body;
+
+    if (!provider || !api_key || !model) {
+      return res.status(400).json({ success: false, error: '缺少必填字段：provider、api_key、model' });
+    }
+
+    if (!['openai', 'anthropic'].includes(provider)) {
+      return res.status(400).json({ success: false, error: '不支持的提供商' });
+    }
+
+    await testModelConnection({
+      provider,
+      api_key,
+      base_url: base_url || undefined,
+      model,
+    });
+
+    res.json(success(null, '连接成功'));
+  } catch (e) {
+    const message = e.message || '连接失败';
+    return res.status(400).json({ success: false, error: message });
   }
 });
 
@@ -114,7 +143,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 
     const config = await ModelConfig.create({
-      id: require('crypto').randomUUID(),
+      id: crypto.randomUUID(),
       user_id: userId,
       name,
       provider,
@@ -155,7 +184,7 @@ router.put('/:id', requireAuth, async (req, res, next) => {
     if (is_default) {
       await ModelConfig.update(
         { is_default: false },
-        { where: { user_id: userId, id: { [require('sequelize').Op.ne]: req.params.id } } }
+        { where: { user_id: userId, id: { [Op.ne]: req.params.id } } }
       );
     }
 

@@ -130,7 +130,7 @@
               <el-tag v-else type="success" size="small">新需求</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" align="center" fixed="right">
+          <el-table-column label="操作" width="200" align="center" fixed="right">
             <template #default="{ row }">
               <el-button text type="primary" size="small" @click="openDetailDrawer(row)">
                 详情
@@ -154,14 +154,14 @@
       stripe
       class="item-table"
     >
-      <el-table-column prop="project_name" label="项目" width="140" show-overflow-tooltip>
+      <el-table-column prop="project_name" label="项目" width="200" show-overflow-tooltip>
         <template #default="{ row }">
           <el-tag type="info" size="small" effect="plain">
             {{ row.project_name }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
       <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
       <el-table-column label="类型" width="110" align="center">
         <template #default="{ row, $index }">
@@ -251,7 +251,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" align="center" fixed="right">
+      <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" size="small" @click="openDetailDrawer(row)">
             详情
