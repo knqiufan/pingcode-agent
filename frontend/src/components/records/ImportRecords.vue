@@ -9,11 +9,21 @@
 
     <el-table :data="records" stripe style="width: 100%" v-loading="loading">
       <el-table-column prop="file_name" label="文件名" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="requirements_count" label="需求数量" width="100" align="center" />
-      <el-table-column prop="projects_count" label="项目数量" width="100" align="center" />
-      <el-table-column prop="target_project_name" label="目标项目" min-width="120" show-overflow-tooltip />
-      <el-table-column prop="imported_count" label="成功导入" width="100" align="center" />
-      <el-table-column prop="failed_count" label="导入失败" width="100" align="center" />
+      <el-table-column prop="requirements_count" label="需求数量" width="90" align="center" />
+      <el-table-column prop="imported_count" label="成功" width="70" align="center">
+        <template #default="{ row }">
+          <span :class="{ 'text-success': row.imported_count > 0 }">
+            {{ row.imported_count }}
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="failed_count" label="失败" width="70" align="center">
+        <template #default="{ row }">
+          <span :class="{ 'text-danger': row.failed_count > 0 }">
+            {{ row.failed_count }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="100" align="center">
         <template #default="{ row }">
           <el-tag :type="getStatusType(row.status)" size="small">
@@ -24,8 +34,20 @@
       <el-table-column prop="createdAt" label="时间" width="160" align="center">
         <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="80" align="center" fixed="right">
+      <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
+          <el-button text type="primary" size="small" @click="viewDetail(row)">
+            明细
+          </el-button>
+          <el-button
+            text
+            type="primary"
+            size="small"
+            @click="viewContent(row)"
+            :disabled="!row.original_file_path"
+          >
+            原文
+          </el-button>
           <el-button text type="danger" size="small" @click="deleteRecord(row)">
             删除
           </el-button>
@@ -48,6 +70,19 @@
       />
     </div>
   </el-card>
+
+  <!-- 导入明细抽屉 -->
+  <ImportRecordDetail
+    v-model="detailVisible"
+    :record="selectedRecord"
+  />
+
+  <!-- 原需求文档弹窗 -->
+  <DemandContentDialog
+    v-model="contentVisible"
+    :record-id="selectedRecord?.id || null"
+    :file-name="selectedRecord?.file_name || ''"
+  />
 </template>
 
 <script setup lang="ts">
@@ -58,12 +93,21 @@ import {
   deleteImportRecord,
   type ImportRecord,
 } from '@/api/records'
+import ImportRecordDetail from './ImportRecordDetail.vue'
+import DemandContentDialog from './DemandContentDialog.vue'
 
 const loading = ref(false)
 const records = ref<ImportRecord[]>([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+
+// 明细抽屉
+const detailVisible = ref(false)
+const selectedRecord = ref<ImportRecord | null>(null)
+
+// 原文弹窗
+const contentVisible = ref(false)
 
 async function loadRecords() {
   loading.value = true
@@ -88,15 +132,27 @@ async function refresh() {
 
 async function deleteRecord(record: ImportRecord) {
   try {
-    await ElMessageBox.confirm(`确定删除记录"${record.file_name}"吗？`, '确认删除', {
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      `确定删除记录"${record.file_name}"吗？相关的导入明细和原需求文档也将被删除。`,
+      '确认删除',
+      { type: 'warning' }
+    )
     await deleteImportRecord(record.id)
     ElMessage.success('删除成功')
     await loadRecords()
   } catch {
     // User cancelled or error handled
   }
+}
+
+function viewDetail(record: ImportRecord) {
+  selectedRecord.value = record
+  detailVisible.value = true
+}
+
+function viewContent(record: ImportRecord) {
+  selectedRecord.value = record
+  contentVisible.value = true
 }
 
 function handlePageChange(page: number) {
@@ -166,5 +222,15 @@ onMounted(() => {
   margin-top: $spacing-md;
   display: flex;
   justify-content: center;
+}
+
+.text-success {
+  color: $success-color;
+  font-weight: 500;
+}
+
+.text-danger {
+  color: $error-color;
+  font-weight: 500;
 }
 </style>

@@ -21,21 +21,28 @@ export function useWorkItemMeta() {
   /** 当前选中项目的类型列表 */
   const typesForProject = computed<WorkItemTypeMeta[]>(() => {
     const pid = appStore.selectedProjectId
-    if (!pid) return []
+    // 如果没有选中项目，返回所有类型（不过滤）
+    if (!pid) return appStore.workItemTypes
     return appStore.workItemTypes.filter((t) => t.project_id === pid)
   })
 
   /** 当前选中项目的优先级列表 */
   const prioritiesForProject = computed<WorkItemPriorityMeta[]>(() => {
     const pid = appStore.selectedProjectId
-    if (!pid) return []
+    // 如果没有选中项目，返回所有优先级（不过滤）
+    if (!pid) return appStore.workItemPriorities
     return appStore.workItemPriorities.filter((p) => p.project_id === pid)
   })
 
   /** 根据类型 ID 获取对应的状态列表 */
   function statesForType(typeId: string | undefined): WorkItemStateMeta[] {
     const pid = appStore.selectedProjectId
-    if (!pid) return []
+    // 如果没有选中项目，返回所有状态（按类型过滤）
+    if (!pid) {
+      return appStore.workItemStates.filter(
+        (s) => !typeId || s.work_item_type_id === typeId
+      )
+    }
     return appStore.workItemStates.filter(
       (s) => s.project_id === pid && (!typeId || s.work_item_type_id === typeId)
     )

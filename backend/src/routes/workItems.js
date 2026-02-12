@@ -6,7 +6,7 @@ import {
   createProject,
   getProjects,
 } from '../services/pingcode.js';
-import { ImportRecord } from '../models/index.js';
+import { ImportRecord, ImportRecordItem } from '../models/index.js';
 import { success } from '../utils/response.js';
 
 const router = express.Router();
@@ -238,6 +238,8 @@ router.post('/import', requireAuth, async (req, res, next) => {
       // 构建 PingCode API 所需的工作项数据
       const pingcodeItems = projectItems.map((i) => {
         const payload = {
+          // 保留本地 ID 用于更新明细状态
+          _local_id: i.id,
           project_id: targetProjectId,
           title: i.title,
           // type_id 是必填字段，默认使用 story
@@ -283,16 +285,58 @@ router.post('/import', requireAuth, async (req, res, next) => {
       results.success += batchResult.success;
       results.failed += batchResult.failed;
       results.errors.push(...batchResult.errors);
+      
+      // 更新导入明细状态（如果提供了 record_id）
+      if (req.body.record_id) {
+        // 更新成功的明细
+        for (const created of batchResult.created || []) {
+          if (created.local_id) {
+            await ImportRecordItem.update(
+              {
+                status: 'success',
+                pingcode_id: created.pingcode_id,
+                pingcode_identifier: created.pingcode_identifier,
+              },
+              { where: { id: created.local_id, record_id: req.body.record_id } }
+            ).catch(err => {
+              console.error('[Import] 更新明细状态失败:', err.message);
+            });
+          }
+        }
+        
+        // 更新失败的明细
+        for (const error of batchResult.errors || []) {
+          if (error.local_id) {
+            await ImportRecordItem.update(
+              {
+                status: 'failed',
+                error_message: error.error,
+              },
+              { where: { id: error.local_id, record_id: req.body.record_id } }
+            ).catch(err => {
+              console.error('[Import] 更新明细状态失败:', err.message);
+            });
+          }
+        }
+      }
     }
 
     // 更新导入记录（如果提供了 record_id）
     if (req.body.record_id) {
       try {
+        // 计算最终状态
+        let finalStatus = 'success';
+        if (results.failed > 0 && results.success > 0) {
+          finalStatus = 'partial_success';
+        } else if (results.failed > 0 && results.success === 0) {
+          finalStatus = 'failed';
+        }
+        
         await ImportRecord.update(
           {
             imported_count: results.success,
             failed_count: results.failed,
-            status: results.failed > 0 ? 'partial_success' : 'success',
+            status: finalStatus,
             error_message: results.errors.length > 0 ? JSON.stringify(results.errors) : null,
           },
           { where: { id: req.body.record_id, user_id: req.user.id } }

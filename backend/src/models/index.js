@@ -7,6 +7,7 @@ import { SyncedProject } from './SyncedProject.js';
 import { SyncedWorkItem } from './SyncedWorkItem.js';
 import { ModelConfig } from './ModelConfig.js';
 import { ImportRecord } from './ImportRecord.js';
+import { ImportRecordItem } from './ImportRecordItem.js';
 import { Role } from './Role.js';
 import { Permission } from './Permission.js';
 import { RolePermission } from './RolePermission.js';
@@ -56,6 +57,17 @@ RolePermission.belongsTo(Permission, { foreignKey: 'permission_id' });
 Role.hasMany(RolePermission, { foreignKey: 'role_id' });
 Permission.hasMany(RolePermission, { foreignKey: 'permission_id' });
 
+// ImportRecord <-> ImportRecordItem 一对多关系
+ImportRecord.hasMany(ImportRecordItem, {
+  foreignKey: 'record_id',
+  as: 'items',
+  onDelete: 'CASCADE',
+});
+ImportRecordItem.belongsTo(ImportRecord, {
+  foreignKey: 'record_id',
+  as: 'record',
+});
+
 // ========== 导出所有模型 ==========
 
 export {
@@ -68,6 +80,7 @@ export {
   SyncedWorkItem,
   ModelConfig,
   ImportRecord,
+  ImportRecordItem,
   Role,
   Permission,
   RolePermission,

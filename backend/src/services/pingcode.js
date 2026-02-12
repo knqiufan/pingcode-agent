@@ -191,27 +191,55 @@ export async function findProjectByName(token, projectName, domain) {
   return fuzzyMatch || null;
 }
 
-/** 批量创建工作项（逐条调用 + 重试） */
+/**
+ * 批量创建工作项（逐条调用 + 重试）
+ * @param {string} token - PingCode access token
+ * @param {Array} items - 工作项数据数组，每项需包含 _local_id 用于关联本地记录
+ * @param {string} domain - PingCode 域名
+ * @returns {Object} 包含 success, failed, errors, created 的结果对象
+ */
 export async function createWorkItemsBatch(token, items, domain) {
   const apiBase = getApiBase(domain);
-  const results = { success: 0, failed: 0, errors: [] };
+  const results = { 
+    success: 0, 
+    failed: 0, 
+    errors: [],
+    created: [], // 成功创建的工作项信息
+  };
 
   for (const item of items) {
+    const localId = item._local_id;
+    // 移除本地 ID，不发送给 PingCode API
+    const { _local_id, ...pingcodeItem } = item;
+    
     try {
+      let createdItem = null;
       await withRetry(
         async () => {
-          await axios.post(`${apiBase}/project/work_items`, item, {
+          const response = await axios.post(`${apiBase}/project/work_items`, pingcodeItem, {
             headers: { Authorization: `Bearer ${token}` },
           });
+          createdItem = response.data;
         },
         { maxRetries: 2, label: 'PingCode:createWorkItem' }
       );
       results.success++;
+      // 记录成功创建的工作项信息
+      results.created.push({
+        local_id: localId,
+        pingcode_id: createdItem?.id,
+        pingcode_identifier: createdItem?.identifier,
+        title: pingcodeItem.title,
+      });
     } catch (e) {
       results.failed++;
       // 获取更详细的错误信息
       const errorDetail = e.response?.data?.message || e.response?.data?.error || e.message;
-      results.errors.push({ item: item.title, error: errorDetail });
+      results.errors.push({ 
+        local_id: localId,
+        item: pingcodeItem.title, 
+        error: errorDetail,
+      });
     }
   }
 

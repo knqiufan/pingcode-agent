@@ -16,6 +16,11 @@ export const ImportRecord = sequelize.define('ImportRecord', {
     allowNull: false,
     comment: '原始文件名',
   },
+  original_file_path: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: '原需求文档保存路径（如 uploads/demand/xxx-1234567890.txt）',
+  },
   requirements_count: {
     type: DataTypes.INTEGER,
     allowNull: false,
