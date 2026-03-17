@@ -104,8 +104,12 @@ async function handleSubmit() {
       ElMessage.success('登录成功')
       router.push('/dashboard')
     }
-  } catch {
-    // 错误已由拦截器统一处理
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+      (err as Error)?.message ||
+      '登录失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }

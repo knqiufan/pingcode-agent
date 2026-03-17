@@ -1,6 +1,8 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/permission.js';
 import { Role, Permission, RolePermission, UserRole, User } from '../models/index.js';
+import { sequelize } from '../services/db.js';
 import { success } from '../utils/response.js';
 import { Op } from 'sequelize';
 
@@ -21,7 +23,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 });
 
 /** 创建角色 */
-router.post('/', requireAuth, async (req, res, next) => {
+router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { name, display_name, description, permissions } = req.body;
 
@@ -54,7 +56,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 });
 
 /** 更新角色 */
-router.put('/:id', requireAuth, async (req, res, next) => {
+router.put('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const role = await Role.findByPk(req.params.id);
 
@@ -94,7 +96,7 @@ router.put('/:id', requireAuth, async (req, res, next) => {
 });
 
 /** 删除角色 */
-router.delete('/:id', requireAuth, async (req, res, next) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const role = await Role.findByPk(req.params.id);
 
@@ -106,10 +108,11 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
       return res.status(403).json({ success: false, error: '系统角色不可删除' });
     }
 
-    await role.destroy();
-    // 删除角色时，同时删除权限关联和用户关联
-    await RolePermission.destroy({ where: { role_id: role.id } });
-    await UserRole.destroy({ where: { role_id: role.id } });
+    await sequelize.transaction(async (t) => {
+      await RolePermission.destroy({ where: { role_id: role.id }, transaction: t });
+      await UserRole.destroy({ where: { role_id: role.id }, transaction: t });
+      await role.destroy({ transaction: t });
+    });
 
     res.json(success(null, '删除成功'));
   } catch (e) {
@@ -132,7 +135,7 @@ router.get('/permissions', requireAuth, async (req, res, next) => {
 });
 
 /** 创建权限 */
-router.post('/permissions', requireAuth, async (req, res, next) => {
+router.post('/permissions', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { name, display_name, description, resource, action } = req.body;
 

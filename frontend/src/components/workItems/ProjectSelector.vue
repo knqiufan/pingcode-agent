@@ -101,14 +101,7 @@ function isMatchedProject(name: string): boolean {
 }
 
 function handleChange(val: string) {
-  // 如果是新建项目（格式为 new:项目名）
-  if (val?.startsWith('new:')) {
-    const projectName = val.substring(4)
-    appStore.selectedProjectId = projectName // 存储项目名称而非ID
-  } else {
-    appStore.selectedProjectId = val
-  }
-  // 对于新建项目，不需要获取元数据（项目还不存在）
+  appStore.selectedProjectId = val
   if (!val?.startsWith('new:')) {
     appStore.fetchMetadata(val)
     appStore.checkDuplicateItems()

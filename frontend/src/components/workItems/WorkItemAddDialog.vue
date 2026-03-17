@@ -31,7 +31,7 @@
       <el-form-item label="类型">
         <el-select v-model="formData.type_id" placeholder="请选择类型" style="width: 100%">
           <el-option
-            v-for="t in typeOptions"
+            v-for="t in dynamicTypeOptions"
             :key="t.value"
             :label="t.label"
             :value="t.value"
@@ -40,9 +40,12 @@
       </el-form-item>
       <el-form-item label="优先级">
         <el-select v-model="formData.priority" placeholder="请选择优先级" style="width: 100%">
-          <el-option label="高" value="High" />
-          <el-option label="中" value="Medium" />
-          <el-option label="低" value="Low" />
+          <el-option
+            v-for="p in dynamicPriorityOptions"
+            :key="p.value"
+            :label="p.label"
+            :value="p.value"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="预估工时">
@@ -66,7 +69,9 @@
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { WorkItem } from '@/api/types'
-import { typeOptions } from './composables/useWorkItemMeta'
+import { useWorkItemMeta } from './composables/useWorkItemMeta'
+
+const { dynamicTypeOptions, dynamicPriorityOptions } = useWorkItemMeta()
 
 const props = defineProps<{
   visible: boolean

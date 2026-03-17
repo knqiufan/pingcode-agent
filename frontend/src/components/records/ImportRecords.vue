@@ -36,6 +36,15 @@
       </el-table-column>
       <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
+          <el-button
+            text
+            type="success"
+            size="small"
+            @click="handleRestore(row)"
+            :disabled="row.status === 'success'"
+          >
+            恢复
+          </el-button>
           <el-button text type="primary" size="small" @click="viewDetail(row)">
             明细
           </el-button>
@@ -93,8 +102,11 @@ import {
   deleteImportRecord,
   type ImportRecord,
 } from '@/api/records'
+import { useAppStore } from '@/stores/app'
 import ImportRecordDetail from './ImportRecordDetail.vue'
 import DemandContentDialog from './DemandContentDialog.vue'
+
+const appStore = useAppStore()
 
 const loading = ref(false)
 const records = ref<ImportRecord[]>([])
@@ -153,6 +165,19 @@ function viewDetail(record: ImportRecord) {
 function viewContent(record: ImportRecord) {
   selectedRecord.value = record
   contentVisible.value = true
+}
+
+async function handleRestore(record: ImportRecord) {
+  try {
+    await ElMessageBox.confirm(
+      `将从记录"${record.file_name}"恢复分析结果到主面板，当前分析内容将被替换。`,
+      '恢复分析结果',
+      { type: 'info', confirmButtonText: '恢复' }
+    )
+    await appStore.restoreAnalysis(record.id)
+  } catch {
+    // 用户取消
+  }
 }
 
 function handlePageChange(page: number) {

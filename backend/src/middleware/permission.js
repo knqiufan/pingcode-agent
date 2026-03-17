@@ -1,4 +1,4 @@
-import { User, Role, UserRole } from '../models/index.js';
+import { Role, UserRole, Permission, RolePermission } from '../models/index.js';
 
 /**
  * 检查用户是否为 admin 的中间件
@@ -9,7 +9,10 @@ export async function requireAdmin(req, res, next) {
       return res.status(401).json({ success: false, error: '未登录' });
     }
 
-    // 检查用户是否有 admin 角色
+    if (req.isAdmin) {
+      return next();
+    }
+
     const userRoles = await UserRole.findAll({
       where: { user_id: req.user.id },
       include: [{ model: Role, where: { name: 'admin' } }],
@@ -19,7 +22,6 @@ export async function requireAdmin(req, res, next) {
       return res.status(403).json({ success: false, error: '需要管理员权限' });
     }
 
-    // 将 admin 标记添加到 req 对象
     req.isAdmin = true;
     next();
   } catch (e) {
@@ -29,7 +31,7 @@ export async function requireAdmin(req, res, next) {
 
 /**
  * 检查用户是否有指定权限的中间件
- * @param {string} permissionName - 权限名称
+ * @param {string} permissionName - 权限名称，格式为 "resource.action"，如 "users.manage"
  */
 export function requirePermission(permissionName) {
   return async (req, res, next) => {
@@ -38,18 +40,42 @@ export function requirePermission(permissionName) {
         return res.status(401).json({ success: false, error: '未登录' });
       }
 
-      // admin 有所有权限
+      if (req.isAdmin) {
+        return next();
+      }
+
       const adminRole = await UserRole.findOne({
         where: { user_id: req.user.id },
         include: [{ model: Role, where: { name: 'admin' } }],
       });
 
       if (adminRole) {
+        req.isAdmin = true;
         return next();
       }
 
-      // 检查用户是否有指定权限
-      // TODO: 实现基于资源的权限检查
+      const userRoles = await UserRole.findAll({
+        where: { user_id: req.user.id },
+        attributes: ['role_id'],
+      });
+
+      if (userRoles.length === 0) {
+        return res.status(403).json({ success: false, error: `缺少权限: ${permissionName}` });
+      }
+
+      const roleIds = userRoles.map(ur => ur.role_id);
+      const rolePermission = await RolePermission.findOne({
+        where: { role_id: roleIds },
+        include: [{
+          model: Permission,
+          where: { name: permissionName },
+        }],
+      });
+
+      if (!rolePermission) {
+        return res.status(403).json({ success: false, error: `缺少权限: ${permissionName}` });
+      }
+
       next();
     } catch (e) {
       next(e);

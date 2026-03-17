@@ -101,3 +101,14 @@ export function getDemandContent(recordId: string) {
     `/api/records/${recordId}/content`
   )
 }
+
+/** 从导入记录恢复分析结果 */
+export function restoreFromRecord(recordId: string) {
+  return request.get<any, ApiResponse<{
+    requirements: any[]
+    record_id: string
+    file_name: string
+    target_project_id?: string
+    target_project_name?: string
+  }>>(`/api/records/${recordId}/restore`)
+}

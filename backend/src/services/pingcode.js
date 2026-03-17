@@ -54,6 +54,23 @@ export async function getToken(code, clientId, clientSecret) {
   );
 }
 
+/** 使用 refresh_token 刷新 access_token */
+export async function refreshAccessToken(refreshToken, clientId, clientSecret) {
+  const url = new URL('/v1/auth/token', pcConf.host);
+  url.searchParams.set('grant_type', 'refresh_token');
+  url.searchParams.set('client_id', clientId);
+  url.searchParams.set('client_secret', clientSecret);
+  url.searchParams.set('refresh_token', refreshToken);
+
+  return withRetry(
+    async () => {
+      const res = await axios.get(url.toString());
+      return res.data;
+    },
+    { maxRetries: 2, label: 'PingCode:refreshToken' }
+  );
+}
+
 /* ---- 项目与工作项 ---- */
 
 /** 获取用户可访问的项目列表 */
@@ -70,18 +87,38 @@ export async function getProjects(token, domain) {
   );
 }
 
-/** 获取指定项目的工作项列表 */
+/** 获取指定项目的工作项列表（自动分页，拉取全部数据） */
 export async function getWorkItems(token, projectId, domain) {
   const apiBase = getApiBase(domain);
-  return withRetry(
-    async () => {
-      const res = await axios.get(`${apiBase}/project/work_items?project_id=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return res.data;
-    },
-    { maxRetries: 2, label: 'PingCode:getWorkItems' }
-  );
+  const pageSize = 100;
+  let allItems = [];
+  let pageIndex = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const data = await withRetry(
+      async () => {
+        const res = await axios.get(
+          `${apiBase}/project/work_items?project_id=${projectId}&page_size=${pageSize}&page_index=${pageIndex}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        return res.data;
+      },
+      { maxRetries: 2, label: `PingCode:getWorkItems(page=${pageIndex})` }
+    );
+
+    const items = Array.isArray(data) ? data : (data?.values || []);
+    allItems = allItems.concat(items);
+
+    const total = data?.total_count ?? data?.total ?? 0;
+    if (items.length < pageSize || allItems.length >= total) {
+      hasMore = false;
+    } else {
+      pageIndex++;
+    }
+  }
+
+  return allItems;
 }
 
 /** 获取工作项类型列表 */
@@ -196,20 +233,22 @@ export async function findProjectByName(token, projectName, domain) {
  * @param {string} token - PingCode access token
  * @param {Array} items - 工作项数据数组，每项需包含 _local_id 用于关联本地记录
  * @param {string} domain - PingCode 域名
+ * @param {Function} [onProgress] - 进度回调 (current, total, item) => void
  * @returns {Object} 包含 success, failed, errors, created 的结果对象
  */
-export async function createWorkItemsBatch(token, items, domain) {
+export async function createWorkItemsBatch(token, items, domain, onProgress) {
   const apiBase = getApiBase(domain);
   const results = { 
     success: 0, 
     failed: 0, 
     errors: [],
-    created: [], // 成功创建的工作项信息
+    created: [],
   };
 
-  for (const item of items) {
+  const total = items.length;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
     const localId = item._local_id;
-    // 移除本地 ID，不发送给 PingCode API
     const { _local_id, ...pingcodeItem } = item;
     
     try {
@@ -224,22 +263,26 @@ export async function createWorkItemsBatch(token, items, domain) {
         { maxRetries: 2, label: 'PingCode:createWorkItem' }
       );
       results.success++;
-      // 记录成功创建的工作项信息
       results.created.push({
         local_id: localId,
         pingcode_id: createdItem?.id,
         pingcode_identifier: createdItem?.identifier,
         title: pingcodeItem.title,
       });
+      if (onProgress) {
+        onProgress(i + 1, total, { title: pingcodeItem.title, status: 'success' });
+      }
     } catch (e) {
       results.failed++;
-      // 获取更详细的错误信息
       const errorDetail = e.response?.data?.message || e.response?.data?.error || e.message;
       results.errors.push({ 
         local_id: localId,
         item: pingcodeItem.title, 
         error: errorDetail,
       });
+      if (onProgress) {
+        onProgress(i + 1, total, { title: pingcodeItem.title, status: 'failed', error: errorDetail });
+      }
     }
   }
 

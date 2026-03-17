@@ -38,7 +38,15 @@ request.interceptors.response.use(
     if (status === 401) {
       localStorage.removeItem('local_token')
       localStorage.removeItem('username')
-      window.location.href = '/#/login'
+      localStorage.removeItem('isAdmin')
+      localStorage.removeItem('roles')
+      const isLoginRequest = error.config?.url?.includes('/auth/local/login')
+      if (!isLoginRequest) {
+        ElMessage.error(message)
+      }
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     } else {
       ElMessage.error(message)
     }

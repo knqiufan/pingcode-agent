@@ -6,8 +6,8 @@ import { computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import type { WorkItemStateMeta, WorkItemPriorityMeta, WorkItemTypeMeta } from '@/api/types'
 
-/** 类型选项（静态备选） */
-export const typeOptions = [
+/** 静态类型选项（当元数据不可用时作为 fallback） */
+export const fallbackTypeOptions = [
   { label: '用户故事', value: 'story' },
   { label: '任务', value: 'task' },
   { label: '缺陷', value: 'bug' },
@@ -15,23 +15,47 @@ export const typeOptions = [
   { label: '史诗', value: 'epic' },
 ]
 
+/** 静态优先级选项（当元数据不可用时作为 fallback） */
+export const fallbackPriorityOptions = [
+  { label: '高', value: 'High' },
+  { label: '中', value: 'Medium' },
+  { label: '低', value: 'Low' },
+]
+
+/** 向后兼容：保留原 typeOptions 导出名 */
+export const typeOptions = fallbackTypeOptions
+
 export function useWorkItemMeta() {
   const appStore = useAppStore()
 
   /** 当前选中项目的类型列表 */
   const typesForProject = computed<WorkItemTypeMeta[]>(() => {
     const pid = appStore.selectedProjectId
-    // 如果没有选中项目，返回所有类型（不过滤）
-    if (!pid) return appStore.workItemTypes
+    if (!pid || pid.startsWith('new:')) return appStore.workItemTypes
     return appStore.workItemTypes.filter((t) => t.project_id === pid)
+  })
+
+  /** 动态类型选项：优先使用项目元数据，无则 fallback 到静态选项 */
+  const dynamicTypeOptions = computed(() => {
+    if (typesForProject.value.length > 0) {
+      return typesForProject.value.map(t => ({ label: t.name, value: t.id }))
+    }
+    return fallbackTypeOptions
   })
 
   /** 当前选中项目的优先级列表 */
   const prioritiesForProject = computed<WorkItemPriorityMeta[]>(() => {
     const pid = appStore.selectedProjectId
-    // 如果没有选中项目，返回所有优先级（不过滤）
-    if (!pid) return appStore.workItemPriorities
+    if (!pid || pid.startsWith('new:')) return appStore.workItemPriorities
     return appStore.workItemPriorities.filter((p) => p.project_id === pid)
+  })
+
+  /** 动态优先级选项：优先使用项目元数据，无则 fallback 到静态选项 */
+  const dynamicPriorityOptions = computed(() => {
+    if (prioritiesForProject.value.length > 0) {
+      return prioritiesForProject.value.map(p => ({ label: p.name, value: p.id }))
+    }
+    return fallbackPriorityOptions
   })
 
   /** 根据类型 ID 获取对应的状态列表 */
@@ -85,11 +109,13 @@ export function useWorkItemMeta() {
   return {
     typesForProject,
     prioritiesForProject,
+    dynamicTypeOptions,
+    dynamicPriorityOptions,
     statesForType,
     getTypeLabel,
     getPriorityLabel,
     getStateLabel,
     formatDate,
-    typeOptions,
+    typeOptions: fallbackTypeOptions,
   }
 }

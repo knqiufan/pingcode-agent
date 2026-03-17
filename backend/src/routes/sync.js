@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { ensureFreshToken } from '../middleware/tokenRefresh.js';
 import {
   getProjects,
   getWorkItems,
@@ -34,90 +35,89 @@ function chunk(arr, size) {
   return result;
 }
 
+const CONCURRENCY_LIMIT = 3;
+
+/** 有限并发执行一组异步任务 */
+async function runWithConcurrency(tasks, limit) {
+  const results = [];
+  let index = 0;
+
+  async function runNext() {
+    const i = index++;
+    if (i >= tasks.length) return;
+    results[i] = await tasks[i]();
+    await runNext();
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => runNext()));
+  return results;
+}
+
 /** 确保元数据表有数据：增量更新元数据 */
 async function ensureMetadata(userId, accessToken, domain, projectList) {
   console.log('[Sync] 开始增量同步元数据...');
 
-  // 获取现有的元数据ID集合，用于去重
   const [existingTypes, existingStates, existingProperties, existingPriorities] = await Promise.all([
-    WorkItemType.findAll({
-      where: { user_id: userId },
-      attributes: ['id', 'project_id'],
-    }),
-    WorkItemState.findAll({
-      where: { user_id: userId },
-      attributes: ['id', 'project_id', 'work_item_type_id'],
-    }),
-    WorkItemProperty.findAll({
-      where: { user_id: userId },
-      attributes: ['id', 'project_id', 'work_item_type_id'],
-    }),
-    WorkItemPriority.findAll({
-      where: { user_id: userId },
-      attributes: ['id', 'project_id'],
-    }),
+    WorkItemType.findAll({ where: { user_id: userId }, attributes: ['id', 'project_id'] }),
+    WorkItemState.findAll({ where: { user_id: userId }, attributes: ['id', 'project_id', 'work_item_type_id'] }),
+    WorkItemProperty.findAll({ where: { user_id: userId }, attributes: ['id', 'project_id', 'work_item_type_id'] }),
+    WorkItemPriority.findAll({ where: { user_id: userId }, attributes: ['id', 'project_id'] }),
   ]);
 
-  // 创建ID集合用于去重
   const existingTypeIds = new Set(existingTypes.map(t => `${t.project_id}:${t.id}`));
   const existingStateIds = new Set(existingStates.map(s => `${s.project_id}:${s.work_item_type_id}:${s.id}`));
   const existingPropertyIds = new Set(existingProperties.map(p => `${p.project_id}:${p.work_item_type_id}:${p.id}`));
   const existingPriorityIds = new Set(existingPriorities.map(p => `${p.project_id}:${p.id}`));
 
-  // 统计新增数量
-  let newTypesCount = 0, newStatesCount = 0, newPropertiesCount = 0, newPrioritiesCount = 0;
+  const tasks = projectList.map((proj) => () =>
+    fetchAndStoreMetadataForProject(
+      userId, accessToken, domain, proj.id,
+      existingTypeIds, existingStateIds, existingPropertyIds, existingPriorityIds,
+    )
+  );
 
-  for (const proj of projectList) {
-    const counts = await fetchAndStoreMetadataForProject(
-      userId,
-      accessToken,
-      domain,
-      proj.id,
-      existingTypeIds,
-      existingStateIds,
-      existingPropertyIds,
-      existingPriorityIds
-    );
-    newTypesCount += counts.types || 0;
-    newStatesCount += counts.states || 0;
-    newPropertiesCount += counts.properties || 0;
-    newPrioritiesCount += counts.priorities || 0;
-  }
+  const allCounts = await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+  const totals = allCounts.reduce(
+    (acc, c) => ({
+      types: acc.types + (c?.types || 0),
+      states: acc.states + (c?.states || 0),
+      properties: acc.properties + (c?.properties || 0),
+      priorities: acc.priorities + (c?.priorities || 0),
+    }),
+    { types: 0, states: 0, properties: 0, priorities: 0 }
+  );
 
-  console.log(`[Sync] 元数据增量同步完成：+${newTypesCount} types, +${newStatesCount} states, +${newPropertiesCount} properties, +${newPrioritiesCount} priorities`);
+  console.log(`[Sync] 元数据增量同步完成：+${totals.types} types, +${totals.states} states, +${totals.properties} properties, +${totals.priorities} priorities`);
 }
 
 async function fetchAndStoreMetadataForProject(
-  userId,
-  accessToken,
-  domain,
-  projectId,
-  existingTypeIds,
-  existingStateIds,
-  existingPropertyIds,
-  existingPriorityIds
+  userId, accessToken, domain, projectId,
+  existingTypeIds, existingStateIds, existingPropertyIds, existingPriorityIds
 ) {
   const counts = { types: 0, states: 0, properties: 0, priorities: 0 };
 
   const typesRes = await getWorkItemTypes(accessToken, projectId, domain);
   const typeList = Array.isArray(typesRes) ? typesRes : (typesRes?.values || []);
 
-  for (const t of typeList) {
-    const typeKey = `${projectId}:${t.id}`;
-    if (existingTypeIds.has(typeKey)) continue;
-
-    await WorkItemType.create({
-      id: t.id,
-      project_id: projectId,
-      user_id: userId,
-      name: t.name || t.id,
-      group: t.group || '',
-    });
-    existingTypeIds.add(typeKey);
-    counts.types++;
+  // 批量收集新类型
+  const newTypes = typeList.filter(t => !existingTypeIds.has(`${projectId}:${t.id}`));
+  if (newTypes.length > 0) {
+    await WorkItemType.bulkCreate(
+      newTypes.map(t => ({
+        id: t.id, project_id: projectId, user_id: userId,
+        name: t.name || t.id, group: t.group || '',
+      })),
+      { ignoreDuplicates: true }
+    );
+    newTypes.forEach(t => existingTypeIds.add(`${projectId}:${t.id}`));
+    counts.types = newTypes.length;
   }
 
-  for (const t of typeList) {
+  // 并行拉取每个类型的 states 和 properties
+  const statesBatch = [];
+  const propsBatch = [];
+
+  await Promise.all(typeList.map(async (t) => {
     const [statesRes, propsRes] = await Promise.all([
       getWorkItemStates(accessToken, projectId, t.id, domain),
       getWorkItemProperties(accessToken, projectId, t.id, domain),
@@ -126,61 +126,56 @@ async function fetchAndStoreMetadataForProject(
     const propList = Array.isArray(propsRes) ? propsRes : (propsRes?.values || []);
 
     for (const s of stateList) {
-      const stateKey = `${projectId}:${t.id}:${s.id}`;
-      if (existingStateIds.has(stateKey)) continue;
-
-      await WorkItemState.create({
-        id: s.id,
-        project_id: projectId,
-        work_item_type_id: t.id,
-        user_id: userId,
-        name: s.name || '',
-        type: s.type || '',
-        color: s.color || '',
+      const key = `${projectId}:${t.id}:${s.id}`;
+      if (existingStateIds.has(key)) continue;
+      statesBatch.push({
+        id: s.id, project_id: projectId, work_item_type_id: t.id,
+        user_id: userId, name: s.name || '', type: s.type || '', color: s.color || '',
       });
-      existingStateIds.add(stateKey);
-      counts.states++;
+      existingStateIds.add(key);
     }
 
     for (const p of propList) {
-      const propKey = `${projectId}:${t.id}:${p.id}`;
-      if (existingPropertyIds.has(propKey)) continue;
-
-      await WorkItemProperty.create({
-        id: p.id,
-        project_id: projectId,
-        work_item_type_id: t.id,
-        user_id: userId,
-        name: p.name || p.id,
-        type: p.type || '',
+      const key = `${projectId}:${t.id}:${p.id}`;
+      if (existingPropertyIds.has(key)) continue;
+      propsBatch.push({
+        id: p.id, project_id: projectId, work_item_type_id: t.id,
+        user_id: userId, name: p.name || p.id, type: p.type || '',
         options: p.options || null,
       });
-      existingPropertyIds.add(propKey);
-      counts.properties++;
+      existingPropertyIds.add(key);
     }
+  }));
+
+  if (statesBatch.length > 0) {
+    await WorkItemState.bulkCreate(statesBatch, { ignoreDuplicates: true });
+    counts.states = statesBatch.length;
+  }
+  if (propsBatch.length > 0) {
+    await WorkItemProperty.bulkCreate(propsBatch, { ignoreDuplicates: true });
+    counts.properties = propsBatch.length;
   }
 
+  // 批量写入优先级
   const prioRes = await getWorkItemPriorities(accessToken, projectId, domain);
   const prioList = Array.isArray(prioRes) ? prioRes : (prioRes?.values || []);
-  for (const p of prioList) {
-    const prioKey = `${projectId}:${p.id}`;
-    if (existingPriorityIds.has(prioKey)) continue;
-
-    await WorkItemPriority.create({
-      id: p.id,
-      project_id: projectId,
-      user_id: userId,
-      name: p.name || p.id,
-    });
-    existingPriorityIds.add(prioKey);
-    counts.priorities++;
+  const newPrios = prioList.filter(p => !existingPriorityIds.has(`${projectId}:${p.id}`));
+  if (newPrios.length > 0) {
+    await WorkItemPriority.bulkCreate(
+      newPrios.map(p => ({
+        id: p.id, project_id: projectId, user_id: userId, name: p.name || p.id,
+      })),
+      { ignoreDuplicates: true }
+    );
+    newPrios.forEach(p => existingPriorityIds.add(`${projectId}:${p.id}`));
+    counts.priorities = newPrios.length;
   }
 
   return counts;
 }
 
 /** 同步 PingCode 项目和工作项（增量：仅新增入向量库与关系库） */
-router.post('/sync-data', requireAuth, async (req, res, next) => {
+router.post('/sync-data', requireAuth, ensureFreshToken, async (req, res, next) => {
   const user = req.user;
   const userId = user.id;
   const accessToken = user.access_token;
@@ -226,11 +221,11 @@ router.post('/sync-data', requireAuth, async (req, res, next) => {
         }))
       );
       await projectColl.upsert({
-        ids: newProjects.map((p) => p.id),
+        ids: newProjects.map((p) => `${userId}_${p.id}`),
         documents: newProjects.map(
           (p) => `Project: ${p.name}\nDescription: ${p.description || ''}`
         ),
-        metadatas: newProjects.map((p) => ({ id: p.id, name: p.name })),
+        metadatas: newProjects.map((p) => ({ id: p.id, name: p.name, user_id: userId })),
       });
       console.log(`[Sync] 新增 ${newProjects.length} 个项目`);
     }
@@ -244,8 +239,7 @@ router.post('/sync-data', requireAuth, async (req, res, next) => {
     const workItemColl = await seekdbClient.getCollection({ name: 'work_items' });
 
     for (const proj of projectList) {
-      const itemsRes = await getWorkItems(accessToken, proj.id, domain);
-      const itemList = Array.isArray(itemsRes) ? itemsRes : (itemsRes?.values || []);
+      const itemList = await getWorkItems(accessToken, proj.id, domain);
 
       const newItems = itemList.filter((item) => !existingWorkItemIds.has(item.id));
       if (newItems.length === 0) continue;
@@ -267,7 +261,7 @@ router.post('/sync-data', requireAuth, async (req, res, next) => {
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
         await workItemColl.upsert({
-          ids: batch.map((item) => item.id),
+          ids: batch.map((item) => `${userId}_${item.id}`),
           documents: batch.map(
             (item) => `Title: ${item.title}\nDescription: ${item.description || ''}`
           ),
@@ -275,6 +269,7 @@ router.post('/sync-data', requireAuth, async (req, res, next) => {
             id: item.id,
             project_id: proj.id,
             title: item.title,
+            user_id: userId,
           })),
         });
         if (i < batches.length - 1) await sleep(syncBatchDelayMs);

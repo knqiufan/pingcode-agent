@@ -38,6 +38,20 @@
       </div>
     </template>
 
+    <!-- 导入进度条 -->
+    <div v-if="appStore.importProgress" class="import-progress">
+      <el-progress
+        :percentage="progressPercent"
+        :format="progressFormat"
+        :stroke-width="20"
+        text-inside
+      />
+      <p class="progress-hint">
+        正在导入: {{ appStore.importProgress.lastItem || '...' }}
+        （{{ appStore.importProgress.current }} / {{ appStore.importProgress.total }}）
+      </p>
+    </div>
+
     <!-- 分组视图 -->
     <WorkItemGroupView
       v-if="groupByProject"
@@ -134,6 +148,16 @@ const editingIndex = ref(-1)
 // 详情抽屉
 const detailDrawerVisible = ref(false)
 const detailItem = ref<WorkItem | null>(null)
+
+const progressPercent = computed(() => {
+  const p = appStore.importProgress
+  if (!p || !p.total) return 0
+  return Math.round((p.current / p.total) * 100)
+})
+
+function progressFormat(percentage: number) {
+  return `${percentage}%`
+}
 
 /** 默认项目名称（用于添加对话框） */
 const defaultProjectName = computed(() => {
@@ -241,6 +265,20 @@ function handleUpdateRow(row: WorkItem, field: keyof WorkItem, value: string) {
 
 .view-toggle {
   margin-left: $spacing-sm;
+}
+
+.import-progress {
+  padding: $spacing-md;
+  margin-bottom: $spacing-md;
+  background-color: $bg-section;
+  border-radius: 8px;
+
+  .progress-hint {
+    margin-top: 8px;
+    font-size: $font-size-sm;
+    color: $text-secondary;
+    text-align: center;
+  }
 }
 
 .solution-dialog {

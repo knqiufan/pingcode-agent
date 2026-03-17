@@ -11,15 +11,27 @@
 
     <main class="dashboard-main">
       <div class="dashboard-content">
-        <el-alert
-          v-if="!userStore.isConnected"
-          title="PingCode 尚未连接"
-          description="请点击右上角「设置」按钮，配置 PingCode 凭证并完成授权。"
-          type="warning"
-          show-icon
-          :closable="false"
-          class="connect-alert"
+        <SetupWizard
+          v-if="showWizard"
+          :is-connected="userStore.isConnected"
+          :syncing="appStore.syncing"
+          :has-synced-data="hasSyncedData"
+          @open-settings="settingsVisible = true"
+          @go-to-models="dismissWizard(); activeTab = 'models'"
+          @sync="handleWizardSync"
+          @skip="dismissWizard"
         />
+
+        <template v-else-if="!userStore.isConnected">
+          <el-alert
+            title="PingCode 尚未连接"
+            description="请点击右上角「设置」按钮，配置 PingCode 凭证并完成授权。"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="connect-alert"
+          />
+        </template>
 
         <template v-else>
           <DataOverview />
@@ -67,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Loading } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
@@ -85,6 +97,7 @@ import ImportRecords from '@/components/records/ImportRecords.vue'
 import RoleManagement from '@/components/roles/RoleManagement.vue'
 import UserManagement from '@/components/users/UserManagement.vue'
 import SettingsDialog from '@/components/settings/SettingsDialog.vue'
+import SetupWizard from '@/components/common/SetupWizard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -92,6 +105,25 @@ const userStore = useUserStore()
 const appStore = useAppStore()
 const settingsVisible = ref(false)
 const activeTab = ref('sync')
+const wizardDismissed = ref(false)
+
+const hasSyncedData = computed(() =>
+  (appStore.syncedProjects?.length || 0) > 0
+)
+
+const showWizard = computed(() => {
+  if (wizardDismissed.value) return false
+  return !userStore.isConnected || !hasSyncedData.value
+})
+
+function dismissWizard() {
+  wizardDismissed.value = true
+}
+
+async function handleWizardSync() {
+  await appStore.syncData()
+  dismissWizard()
+}
 
 function handleLogout() {
   userStore.logout()
@@ -107,6 +139,9 @@ onMounted(async () => {
   await userStore.checkConnection()
   if (userStore.isConnected) {
     await appStore.fetchSyncedData()
+    if (hasSyncedData.value) {
+      wizardDismissed.value = true
+    }
   }
 })
 </script>

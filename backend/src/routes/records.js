@@ -221,4 +221,45 @@ router.get('/:id/content', requireAuth, async (req, res, next) => {
   }
 });
 
+/** 从导入记录恢复分析结果（返回工作项列表，用于继续编辑和导入） */
+router.get('/:id/restore', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const record = await ImportRecord.findOne({
+      where: { id: req.params.id, user_id: userId },
+    });
+
+    if (!record) {
+      return res.status(404).json({ success: false, error: '记录不存在' });
+    }
+
+    const items = await ImportRecordItem.findAll({
+      where: { record_id: record.id },
+      order: [['createdAt', 'ASC']],
+    });
+
+    const requirements = items.map(item => ({
+      id: item.id,
+      project_name: item.project_name || record.target_project_name || '',
+      title: item.title,
+      description: item.description || '',
+      priority: 'Medium',
+      estimated_hours: 8,
+      start_at: new Date().toISOString(),
+      type_id: item.type_id || 'story',
+      status: item.status === 'success' ? 'imported' : 'new',
+    }));
+
+    res.json(success({
+      requirements,
+      record_id: record.id,
+      file_name: record.file_name,
+      target_project_id: record.target_project_id,
+      target_project_name: record.target_project_name,
+    }, '恢复成功'));
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;

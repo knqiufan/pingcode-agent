@@ -12,7 +12,7 @@ import type {
   PingCodeUserInfo,
   MetadataOverview,
 } from '@/api/types'
-import { syncData as syncDataApi, matchProject, checkDuplicates, importItems } from '@/api/workItems'
+import { syncData as syncDataApi, matchProject, checkDuplicates, importItems, importItemsStream } from '@/api/workItems'
 import {
   getWorkItemTypes,
   getWorkItemStates,
@@ -24,6 +24,7 @@ import {
   getMetadataOverview,
 } from '@/api/metadata'
 import { analyzeFile } from '@/api/analyze'
+import { restoreFromRecord } from '@/api/records'
 import { ElMessage } from 'element-plus'
 
 export const useAppStore = defineStore('app', () => {
@@ -36,6 +37,9 @@ export const useAppStore = defineStore('app', () => {
   const importing = ref(false)
   /** 当前分析产生的导入记录 ID，用于导入完成后更新记录状态 */
   const currentRecordId = ref<string | undefined>(undefined)
+
+  /** 导入进度信息 */
+  const importProgress = ref<{ current: number; total: number; lastItem?: string } | null>(null)
 
   const syncedProjects = ref<SyncedProjectMeta[]>([])
   const syncedWorkItems = ref<SyncedWorkItemMeta[]>([])
@@ -195,43 +199,80 @@ export const useAppStore = defineStore('app', () => {
     requirements.value[index] = { ...current, ...patch } as WorkItem
   }
 
-  /** 批量导入到 PingCode */
+  /** 批量导入到 PingCode（使用 SSE 实时进度） */
   async function importToPingCode() {
     if (!selectedProjectId.value) return
     importing.value = true
-    try {
-      // 如果是新建项目（格式为 new:项目名），不传 projectId，让后端根据 project_name 自动创建
-      const isNewProject = selectedProjectId.value?.startsWith('new:')
-      const projectId = isNewProject ? undefined : selectedProjectId.value
+    importProgress.value = { current: 0, total: requirements.value.length }
 
-      const res = await importItems(
+    const isNewProject = selectedProjectId.value?.startsWith('new:')
+    const projectId = isNewProject ? '' : selectedProjectId.value
+
+    return new Promise<void>((resolve) => {
+      importItemsStream(
         requirements.value,
-        projectId || '',
+        projectId,
         currentRecordId.value,
+        {
+          onProgress(data) {
+            importProgress.value = {
+              current: data.current,
+              total: data.total,
+              lastItem: data.title,
+            }
+          },
+          onProjectCreated(data) {
+            ElMessage.info(`自动创建了项目: ${data.name}`)
+          },
+          onComplete(data) {
+            const result = data.result
+            ElMessage.success(`成功导入 ${result?.success ?? 0} 个工作项`)
+            if (result?.failed && result.failed > 0) {
+              ElMessage.warning(`${result.failed} 个工作项导入失败`)
+            }
+            requirements.value = []
+            selectedProjectId.value = ''
+            projects.value = []
+            currentRecordId.value = undefined
+            importProgress.value = null
+            importing.value = false
+            fetchSyncedData()
+            resolve()
+          },
+          onError(data) {
+            ElMessage.error(data.message || '导入失败')
+            importProgress.value = null
+            importing.value = false
+            resolve()
+          },
+        }
       )
-      const result = res.data?.result
+    })
+  }
 
-      // 提示自动创建的项目
-      if (result?.createdProjects && result.createdProjects.length > 0) {
-        const names = result.createdProjects.map((p) => p.name).join('、')
-        ElMessage.info(`自动创建了项目: ${names}`)
+  /** 从导入记录恢复分析结果 */
+  async function restoreAnalysis(recordId: string) {
+    analyzing.value = true
+    try {
+      const res = await restoreFromRecord(recordId)
+      const data = res.data
+      if (!data?.requirements?.length) {
+        ElMessage.warning('该记录没有可恢复的工作项')
+        return
+      }
+      requirements.value = data.requirements
+      currentRecordId.value = data.record_id
+
+      if (data.target_project_id) {
+        selectedProjectId.value = data.target_project_id
+        await fetchMetadata(data.target_project_id)
       }
 
-      ElMessage.success(`成功导入 ${result?.success ?? 0} 个工作项`)
-      if (result?.failed && result.failed > 0) {
-        ElMessage.warning(`${result.failed} 个工作项导入失败`)
-      }
-      requirements.value = []
-      selectedProjectId.value = ''
-      projects.value = []
-      currentRecordId.value = undefined
-
-      // 刷新同步数据以显示新创建的项目
-      await fetchSyncedData()
+      ElMessage.success(`已恢复 ${data.requirements.length} 个工作项`)
     } catch {
       // 错误已由拦截器处理
     } finally {
-      importing.value = false
+      analyzing.value = false
     }
   }
 
@@ -250,6 +291,7 @@ export const useAppStore = defineStore('app', () => {
     analyzing,
     syncing,
     importing,
+    importProgress,
     syncedProjects,
     syncedWorkItems,
     workItemTypes,
@@ -268,6 +310,7 @@ export const useAppStore = defineStore('app', () => {
     removeRequirement,
     updateRequirement,
     importToPingCode,
+    restoreAnalysis,
     resetAnalysis,
   }
 })
