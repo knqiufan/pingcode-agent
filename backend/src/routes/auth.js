@@ -105,7 +105,7 @@ router.get('/callback', async (req, res, next) => {
 
     // 获取 PingCode 用户 ID
     let pingcodeUid = getUserIdFromToken(access_token);
-    let domain = req.query.domain || 'open.pingcode.com';
+    let domain = req.query.domain || appConfig.pingcode.defaultDomain;
 
     if (!pingcodeUid) {
       const userInfo = await fetchUserInfo(access_token, domain);

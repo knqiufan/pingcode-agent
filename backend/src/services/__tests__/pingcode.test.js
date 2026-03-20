@@ -10,7 +10,8 @@ vi.mock('axios', () => ({
 vi.mock('../../config/index.js', () => ({
   appConfig: {
     pingcode: {
-      host: 'https://open.pingcode.com',
+      host: 'http://pingcode.test.local:9999',
+      defaultDomain: 'pingcode.test.local:9999',
       redirectUri: 'http://localhost:3000/auth/callback',
     },
   },

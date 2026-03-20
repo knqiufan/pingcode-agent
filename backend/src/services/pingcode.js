@@ -11,7 +11,7 @@ function normalizeHost(domain) {
   if (!domain) return pcConf.host;
 
   const isSaaS = !domain.includes('.') || domain.endsWith('.pingcode.com');
-  if (isSaaS) return 'https://open.pingcode.com';
+  if (isSaaS) return pcConf.host;
 
   if (domain.startsWith('http://') || domain.startsWith('https://')) return domain;
   return `https://${domain}`;

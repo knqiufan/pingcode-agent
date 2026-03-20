@@ -21,6 +21,18 @@ function loadEnv() {
 
 loadEnv();
 
+/** 从 PINGCODE_HOST（完整 URL）解析 host:port，供 OAuth 回调等无 scheme 的 domain 参数使用 */
+function pingcodeHostAuthority(hostUrl) {
+  if (!hostUrl) return '';
+  try {
+    return new URL(hostUrl).host;
+  } catch {
+    return '';
+  }
+}
+
+const pingcodeHost = process.env.PINGCODE_HOST || '';
+
 /** 统一导出的配置对象 */
 export const appConfig = {
   env: process.env.NODE_ENV || 'development',
@@ -39,7 +51,8 @@ export const appConfig = {
 
   pingcode: {
     redirectUri: process.env.PINGCODE_REDIRECT_URI || 'http://localhost:3000/auth/callback',
-    host: process.env.PINGCODE_HOST || 'https://open.pingcode.com',
+    host: pingcodeHost,
+    defaultDomain: pingcodeHostAuthority(pingcodeHost),
   },
 
   seekdb: {

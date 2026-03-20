@@ -104,7 +104,8 @@ FRONTEND_URL=http://localhost:5177
 
 # PingCode OAuth（host / redirect_uri 全局配置；client_id/secret 可在「设置」中按用户配置）
 PINGCODE_REDIRECT_URI=http://localhost:3000/auth/callback
-PINGCODE_HOST=https://open.pingcode.com
+# 必填：PingCode 访问根地址（须含协议，如 http 或 https；若含端口一并写上）
+PINGCODE_HOST=http://your-pingcode-host:port
 
 # JWT 密钥（生产环境务必更换）
 JWT_SECRET=your_jwt_secret
