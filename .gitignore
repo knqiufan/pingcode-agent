@@ -3,6 +3,8 @@ node_modules/
 
 #doc
 docs/
+doc/
+uploads/
 
 # Environment variables (may contain secrets)
 .env
