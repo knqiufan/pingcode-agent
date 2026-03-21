@@ -140,11 +140,24 @@ onMounted(async () => {
     router.replace('/dashboard')
     return
   }
+
+  const afterEnterprise = route.query.after_enterprise === '1'
+
   await userStore.checkConnection()
   if (userStore.isConnected) {
     await appStore.fetchSyncedData()
     if (hasSyncedData.value) {
       wizardDismissed.value = true
+    }
+  }
+
+  if (afterEnterprise) {
+    await router.replace({ path: '/dashboard', query: {} })
+    if (userStore.isConnected) {
+      activeTab.value = 'sync'
+      if (!hasSyncedData.value) {
+        wizardDismissed.value = false
+      }
     }
   }
 })

@@ -129,6 +129,16 @@ export interface SyncData {
   addedWorkItems?: number
 }
 
+/** 清除同步数据结果 */
+export interface ClearSyncedData {
+  projects: number
+  workItems: number
+  types: number
+  states: number
+  properties: number
+  priorities: number
+}
+
 /** 元数据概览 */
 export interface MetadataOverview {
   projects: number
