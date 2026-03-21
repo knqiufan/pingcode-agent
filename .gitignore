@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+#doc
+docs/
+
 # Environment variables (may contain secrets)
 .env
 .env.*
