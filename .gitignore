@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+#doc
+docs/
+doc/
+uploads/
+
 # Environment variables (may contain secrets)
 .env
 .env.*
@@ -41,6 +46,7 @@ _tmp_*/
 *.njsproj
 *.sln
 *.sw?
+.trae
 
 # Misc
 *.local

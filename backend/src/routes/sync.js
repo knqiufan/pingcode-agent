@@ -8,6 +8,7 @@ import { success } from '../utils/response.js';
 import { appConfig } from '../config/index.js';
 import { chunk } from '../utils/array.js';
 import { ensureMetadata } from '../services/metadata.js';
+import { clearUserSyncedData } from '../services/clearSyncedData.js';
 
 const router = express.Router();
 const { syncWorkItemBatchSize, syncBatchDelayMs } = appConfig.seekdb;
@@ -134,6 +135,16 @@ router.post('/sync-data', requireAuth, ensureFreshToken, async (req, res, next) 
         '同步完成'
       )
     );
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** 清除当前用户从 PingCode 同步到本地的数据（不含导入记录） */
+router.delete('/sync-data', requireAuth, async (req, res, next) => {
+  try {
+    const result = await clearUserSyncedData(req.user.id);
+    res.json(success(result, '已清除本地同步数据'));
   } catch (e) {
     next(e);
   }

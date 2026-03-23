@@ -3,6 +3,7 @@ import type {
   WorkItem,
   ApiResponse,
   SyncData,
+  ClearSyncedData,
   MatchProjectData,
   CheckDuplicatesData,
   ImportResultData,
@@ -11,6 +12,11 @@ import type {
 /** 同步 PingCode 数据 */
 export function syncData() {
   return request.post<any, ApiResponse<SyncData>>('/api/sync-data', {})
+}
+
+/** 清除当前用户从 PingCode 同步到本地的数据 */
+export function clearSyncedData() {
+  return request.delete<any, ApiResponse<ClearSyncedData>>('/api/sync-data')
 }
 
 /** 匹配项目 */
